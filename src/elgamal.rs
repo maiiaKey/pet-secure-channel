@@ -17,15 +17,39 @@ pub struct ElGamalCiphertext {
 
 impl ElGamalCiphertext {
     /// Generates a new KeyPair for encryption
-    pub fn keygen() -> KeyPair {}
+    pub fn keygen() -> KeyPair {
+        return KeyPair::generate();
+    }
 
     /// Encrypts a message (represented as a scalar) using the recipient's public key
     /// Returns an `ElGamalCiphertext` struct containing the encrypted message
-    pub fn encrypt(message: &Scalar, public_key: &RistrettoPoint) -> ElGamalCiphertext {}
+    pub fn encrypt(message: &Scalar, public_key: &RistrettoPoint) -> ElGamalCiphertext {
+        let r: Scalar = Scalar::random(&mut OsRng);
+        let pk_r: RistrettoPoint = public_key * r;
+        let c1: RistrettoPoint = &RISTRETTO_BASEPOINT_POINT * r;
+        let c2: Scalar = ElGamalCiphertext::hash_point_as_scalar(&pk_r) + message;
+        return ElGamalCiphertext { c1, c2 };
+    }
 
     /// Decrypts an ElGamal ciphertext using the recipient's private key
     /// Returns the decrypted scalar (original message)
-    pub fn decrypt(&self, private_key: &Scalar) -> Scalar {}
+    pub fn decrypt(&self, private_key: &Scalar) -> Scalar {
+        let c1_sk = self.c1 * private_key;
+        let hash_c1_sk = ElGamalCiphertext::hash_point_as_scalar(&c1_sk);
+        return self.c2 - hash_c1_sk;
+    }
+
+    fn hash_point_as_scalar(point: &RistrettoPoint) -> Scalar {
+        let mut hasher = Sha512::new();
+        let point_bytes = point.compress().to_bytes();
+        hasher.update(&point_bytes);
+        let hash_point = hasher.finalize();
+        let hash_point_32: [u8; 32] = hash_point[..32]
+            .try_into()
+            .expect("Hash slice is not 32 bytes");
+        let hash_point_scalar = Scalar::from_bytes_mod_order(hash_point_32);
+        return hash_point_scalar;
+    }
 }
 
 #[cfg(test)]
