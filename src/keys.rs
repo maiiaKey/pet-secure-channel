@@ -16,7 +16,51 @@ pub struct KeyPair {
 
 impl KeyPair {
     /// Generate a Schnorr signature key pair
-    pub fn generate() -> KeyPair {}
+    pub fn generate() -> KeyPair {
+        let mut rng: OsRng = OsRng;
+        let private_key: Scalar = Scalar::random(&mut rng);
+        let public_key: RistrettoPoint = &RISTRETTO_BASEPOINT_POINT * private_key;
+        return KeyPair {
+            private_key,
+            public_key,
+        };
+    }
+
+    pub fn write_sk_to_file(&self, file_path: &str) -> Result<(), io::Error> {
+        let scalar = self.private_key.to_bytes();
+        let mut file = File::create(file_path)?;
+        file.write_all(&scalar)?;
+        return Ok(());
+    }
+
+    pub fn write_pk_to_file(&self, file_path: &str) -> Result<(), io::Error> {
+        let point = self.public_key.compress().to_bytes();
+        let mut file = File::create(file_path)?;
+        file.write_all(&point)?;
+        return Ok(());
+    }
+
+    pub fn from_file(sk_path: &str) -> Result<KeyPair, io::Error> {
+        let mut file = File::open(sk_path)?;
+        let mut scalar = [0u8; 32];
+        file.read_exact(&mut scalar);
+        let private_key = Scalar::from_bytes_mod_order(scalar);
+        let public_key = &RISTRETTO_BASEPOINT_POINT * private_key;
+        return Ok(KeyPair {
+            private_key,
+            public_key,
+        });
+    }
+
+    pub fn pk_from_file(pk_path: &str) -> Result<RistrettoPoint, io::Error> {
+        let mut file = File::open(pk_path)?;
+        let mut point = [0u8; 32];
+        file.read_exact(&mut point)?;
+        let decompressed_point = CompressedRistretto(point)
+            .decompress()
+            .expect("Failed to decompress the point");
+        return Ok(decompressed_point);
+    }
 }
 
 // Unit tests for keys module
