@@ -3,6 +3,7 @@ extern crate curve25519_dalek;
 extern crate rand;
 
 use aead::generic_array::GenericArray;
+use aead::{AeadCore, Key};
 use aes_gcm::aead::{Aead, KeyInit}; // Use KeyInit for the `new` method
 use aes_gcm::{Aes256Gcm, Nonce}; // AES-GCM with 256-bit key
 use curve25519_dalek::scalar::Scalar;
@@ -36,10 +37,36 @@ impl AESCiphertext {
     }
 
     /// Encrypts a plaintext message using AES-256-GCM with a Scalar as the AES key
-    pub fn encrypt(scalar_key: &Scalar, message: &[u8]) -> Result<AESCiphertext, String> {}
+    pub fn encrypt(scalar_key: &Scalar, message: &[u8]) -> Result<AESCiphertext, String> {
+        let key_bytes = AESCiphertext::scalar_to_aes_key(scalar_key);
+        let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
+        let cipher = Aes256Gcm::new(&key);
+        let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+        let ciphertext = cipher.encrypt(&nonce, message);
+
+        if ciphertext.is_ok() {
+            return Ok(AESCiphertext {
+                nonce: nonce.into(),
+                ciphertext: ciphertext.unwrap(),
+            });
+        } else {
+            return Err("Could not encrypt the message".to_string());
+        }
+    }
 
     /// Decrypts a ciphertext using AES-256-GCM with a Scalar as the AES key
     pub fn decrypt(scalar_key: &Scalar, aes_ciphertext: &AESCiphertext) -> Result<Vec<u8>, String> {
+        let key_bytes = AESCiphertext::scalar_to_aes_key(scalar_key);
+        let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
+        let cipher = Aes256Gcm::new(&key);
+        let nonce = Nonce::from_slice(&aes_ciphertext.nonce);
+        let plaintext = cipher.decrypt(nonce, aes_ciphertext.ciphertext.as_ref());
+
+        if plaintext.is_ok() {
+            return Ok(plaintext.unwrap());
+        } else {
+            return Err("Could not decrypt the ciphertext".to_string());
+        }
     }
 }
 
