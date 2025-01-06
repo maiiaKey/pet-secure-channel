@@ -16,10 +16,23 @@ pub struct SchnorrSignature {
 
 impl SchnorrSignature {
     /// Generates a new KeyPair for signing
-    pub fn keygen() -> KeyPair {}
+    pub fn keygen() -> KeyPair {
+        return KeyPair::generate();
+    }
 
     /// Sign a message with a private key
-    pub fn sign(message: &[u8], signing_key: &Scalar) -> SchnorrSignature {}
+    pub fn sign(message: &[u8], signing_key: &Scalar) -> SchnorrSignature {
+        let r: Scalar = Scalar::random(&mut OsRng);
+        let R: RistrettoPoint = &RISTRETTO_BASEPOINT_POINT * r;
+
+        let mut hasher = Sha512::new();
+        hasher.update(R.compress().as_bytes());
+        hasher.update(message);
+        let h = Scalar::from_hash(hasher);
+        let s = r + h * signing_key;
+
+        return SchnorrSignature { R, s };
+    }
 
     /// Verify a Schnorr signature
     pub fn verify(
@@ -27,6 +40,13 @@ impl SchnorrSignature {
         message: &[u8],
         public_key: &RistrettoPoint,
     ) -> bool {
+        let mut hasher = Sha512::new();
+        hasher.update(signature.R.compress().as_bytes());
+        hasher.update(message);
+        let h = Scalar::from_hash(hasher);
+        let left = &RISTRETTO_BASEPOINT_POINT * signature.s;
+        let right = &signature.R + h * public_key;
+        return left == right;
     }
 
     // Converts RistrettoPoint to a byte array
