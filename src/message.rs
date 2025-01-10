@@ -122,6 +122,7 @@ impl Message {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::keys::KeyPair;
     use curve25519_dalek::ristretto::RistrettoPoint;
     use rand::rngs::OsRng;
     use std::fs;
