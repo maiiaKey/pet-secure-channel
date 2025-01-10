@@ -2,12 +2,11 @@ extern crate aes_gcm;
 extern crate curve25519_dalek;
 extern crate rand;
 
-use aead::generic_array::GenericArray;
 use aead::{AeadCore, Key};
 use aes_gcm::aead::{Aead, KeyInit}; // Use KeyInit for the `new` method
 use aes_gcm::{Aes256Gcm, Nonce}; // AES-GCM with 256-bit key
 use curve25519_dalek::scalar::Scalar;
-use rand::{rngs::OsRng, Rng};
+use rand::{rngs::OsRng};
 
 const AES_KEY_SIZE: usize = 32; // AES-256 requires a 256-bit key (32 bytes)
 pub const AES_NONCE_SIZE: usize = 12; // Recommended nonce size for AES-GCM is 12 bytes

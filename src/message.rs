@@ -1,5 +1,4 @@
 use crate::hybrid_enc::HybridCiphertext;
-use crate::keys::KeyPair;
 use crate::schnorr::SchnorrSignature;
 use crate::serializers::*;
 use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
@@ -7,7 +6,6 @@ use curve25519_dalek::scalar::Scalar;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::fs::File;
-use std::io::Read;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Message {
@@ -44,25 +42,81 @@ impl Message {
         recipient: CompressedRistretto,
         signature: SchnorrSignature,
     ) -> Self {
+        Self {
+            version,
+            payload,
+            sender: sender.to_bytes(),
+            recipient: recipient.to_bytes(),
+            signature,
+        }
     }
 
     /// Writes the message to a JSON file
     pub fn to_file(&self, filepath: &str) -> std::io::Result<()> {
         let file = File::create(filepath)?;
-        serde_json::to_writer_pretty(file, &self)?; // Write JSON in a human-readable format
+        serde_json::to_writer_pretty(file, &self)?;
         Ok(())
     }
 
     /// Encrypts the whole message using hybrid encryption
-    pub fn encrypt(&mut self, elgamal_public_key: &RistrettoPoint) -> Result<(), String> {}
+    pub fn encrypt(&mut self, elgamal_public_key: &RistrettoPoint) -> Result<(), String> {
+        // Serialize the current message excluding the signature and other fields
+        let serialized_message = serialize_message_to_bytes(self)?;
+        let hybrid_ciphertext = HybridCiphertext::encrypt(&serialized_message, elgamal_public_key)?;
+
+        // Update the message payload to contain the encrypted data
+        self.payload = hybrid_ciphertext.serialize(); // Store as bytes
+
+        // Update other fields
+        self.version += 1;
+        self.sender = [0u8; 32]; // Set to default sender
+        self.recipient = elgamal_public_key.compress().to_bytes(); // Update with recipient's public key
+        self.signature = SchnorrSignature::emty_signature(); // Clear signature after encryption
+
+        Ok(())
+    }
 
     /// Decrypts the payload using hybrid decryption, sets version back to 0
-    pub fn decrypt(&mut self, elgamal_private_key: &Scalar) -> Result<(), String> {}
+    pub fn decrypt(&mut self, elgamal_private_key: &Scalar) -> Result<(), String> {
+        let hybrid_ciphertext = HybridCiphertext::deserialize(&self.payload)?;
+        let decrypted_bytes = hybrid_ciphertext.decrypt(elgamal_private_key)?;
 
-    /// signs the payload using Schnorr signatures, sets the signing public key as sender
-    pub fn sign(&mut self, signing_key: &Scalar) {}
+        // Deserialize the original message from bytes
+        let decrypted_message = deserialize_message_from_bytes(&decrypted_bytes)?;
+        self.version = decrypted_message.version;
+        self.payload = decrypted_message.payload;
+        self.sender = decrypted_message.sender;
+        self.recipient = decrypted_message.recipient;
+        self.signature = decrypted_message.signature;
 
-    pub fn verify(&self) -> bool {}
+        Ok(())
+    }
+
+    /// Signs the payload using Schnorr signatures, sets the signing public key as sender
+    pub fn sign(&mut self, signing_key: &Scalar) {
+        let vk = signing_key * &curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
+
+        // Sign the payload
+        let signature = SchnorrSignature::sign(&self.payload, signing_key);
+
+        self.signature = signature; // Save the signature
+        self.sender = vk.compress().to_bytes(); // Set the sender to the public key
+    }
+
+    /// Verifies the signature
+    pub fn verify(&self) -> bool {
+        let vk = CompressedRistretto(self.sender)
+            .decompress()
+            .expect("Invalid sender format");
+        SchnorrSignature::verify(&self.signature, &self.payload, &vk)
+    }
+
+    /// Displays the message
+    pub fn display(&self) -> Result<(), serde_json::Error> {
+        let string_message = serde_json::to_string_pretty(&self)?;
+        println!("{}", string_message);
+        Ok(())
+    }
 }
 
 #[cfg(test)]
