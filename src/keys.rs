@@ -1,8 +1,8 @@
-use base64::prelude::*;
 use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
 use curve25519_dalek::scalar::Scalar;
 use rand::rngs::OsRng;
+use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::io::{self, Read};
@@ -34,8 +34,8 @@ impl KeyPair {
 
     pub fn write_pk_to_file(&self, file_path: &str) -> Result<(), io::Error> {
         let point = self.public_key.compress().to_bytes();
-        let mut file = File::create(file_path)?;
-        file.write_all(&point)?;
+        let encoded = base64::encode(point);
+        fs::write(file_path, encoded)?;
         return Ok(());
     }
 
@@ -52,10 +52,11 @@ impl KeyPair {
     }
 
     pub fn pk_from_file(pk_path: &str) -> Result<RistrettoPoint, io::Error> {
-        let mut file = File::open(pk_path)?;
-        let mut point = [0u8; 32];
-        file.read_exact(&mut point)?;
-        let decompressed_point = CompressedRistretto(point)
+        let base64_string = fs::read_to_string(pk_path)?;
+        let decoded = base64::decode(base64_string).expect("Failed to decode base64 str");
+        let compressed_point = CompressedRistretto::from_slice(&decoded)
+            .expect("Failed to convert str to CompressedRistretto");
+        let decompressed_point = compressed_point
             .decompress()
             .expect("Failed to decompress the point");
         return Ok(decompressed_point);
